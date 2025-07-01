@@ -1082,13 +1082,13 @@ class ClassicMainWindow(QMainWindow):
         # Top navigation bar
         nav_bar = QWidget()
         nav_layout = QHBoxLayout(nav_bar)
-        nav_layout.setContentsMargins(20, 16, 20, 16)  # Less padding
-        nav_layout.setSpacing(16)  # Less space between buttons
+        nav_layout.setContentsMargins(20, 16, 20, 16)
+        nav_layout.setSpacing(16)
         nav_layout.addStretch()
         for label, icon_name in NAV_BUTTONS:
             btn = QPushButton(label)
             btn.setIcon(ICON_MAP.get(icon_name, QIcon()))
-            btn.setMinimumSize(110, 54)  # Moderately sized buttons
+            btn.setMinimumSize(110, 54)
             btn.setFont(QFont('Arial', 15, QFont.Weight.Bold))
             btn.setStyleSheet("background: white; color: #0a2a66; border-radius: 8px; margin-right: 6px;")
             btn.clicked.connect(lambda checked, l=label: self.menu_clicked(l))
@@ -1100,7 +1100,79 @@ class ClassicMainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_layout.addWidget(nav_bar, alignment=Qt.AlignmentFlag.AlignTop)
-        main_layout.addSpacing(50)  # Less space below nav bar
+        # --- Dashboard Section ---
+        dashboard_widget = QWidget()
+        dashboard_layout = QHBoxLayout(dashboard_widget)
+        dashboard_layout.setContentsMargins(40, 20, 40, 10)
+        dashboard_layout.setSpacing(30)
+        # Dashboard cards
+        self.sales_today_label = self._make_dashboard_card("Today's Sales", "$0.00")
+        self.transactions_today_label = self._make_dashboard_card("Transactions", "0")
+        self.low_stock_label = self._make_dashboard_card("Low Stock Items", "0")
+        self.top_product_label = self._make_dashboard_card("Top Product", "-")
+        dashboard_layout.addWidget(self.sales_today_label)
+        dashboard_layout.addWidget(self.transactions_today_label)
+        dashboard_layout.addWidget(self.low_stock_label)
+        dashboard_layout.addWidget(self.top_product_label)
+        dashboard_layout.addStretch()
+        # User info and date/time
+        user_info = QLabel(f"User: {current_user if current_user else '-'}")
+        user_info.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
+        from datetime import datetime
+        self.datetime_label = QLabel(datetime.now().strftime("%A, %d %B %Y %H:%M"))
+        self.datetime_label.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
+        dashboard_layout.addWidget(user_info)
+        dashboard_layout.addWidget(self.datetime_label)
+        main_layout.addWidget(dashboard_widget)
+        # --- Quick Actions ---
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(40, 0, 40, 0)
+        actions_layout.setSpacing(24)
+        new_sale_btn = QPushButton("New Sale")
+        new_sale_btn.setMinimumHeight(40)
+        new_sale_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        new_sale_btn.setStyleSheet("background: #388e3c; color: white; border-radius: 8px; font-size: 15px;")
+        new_sale_btn.clicked.connect(lambda: self.menu_clicked('POS'))
+        add_product_btn = QPushButton("Add Product")
+        add_product_btn.setMinimumHeight(40)
+        add_product_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        add_product_btn.setStyleSheet("background: #1976d2; color: white; border-radius: 8px; font-size: 15px;")
+        add_product_btn.clicked.connect(lambda: self.menu_clicked('Stock'))
+        receive_stock_btn = QPushButton("Receive Stock")
+        receive_stock_btn.setMinimumHeight(40)
+        receive_stock_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        receive_stock_btn.setStyleSheet("background: #ffa000; color: white; border-radius: 8px; font-size: 15px;")
+        receive_stock_btn.clicked.connect(lambda: self.menu_clicked('Purchases'))
+        print_report_btn = QPushButton("Print Report")
+        print_report_btn.setMinimumHeight(40)
+        print_report_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        print_report_btn.setStyleSheet("background: #0a2a66; color: white; border-radius: 8px; font-size: 15px; border: 2px solid white;")
+        print_report_btn.clicked.connect(lambda: self.menu_clicked('Sales'))
+        actions_layout.addWidget(new_sale_btn)
+        actions_layout.addWidget(add_product_btn)
+        actions_layout.addWidget(receive_stock_btn)
+        actions_layout.addWidget(print_report_btn)
+        actions_layout.addStretch()
+        main_layout.addWidget(actions_widget)
+        # --- Recent Activity ---
+        recent_widget = QWidget()
+        recent_layout = QVBoxLayout(recent_widget)
+        recent_layout.setContentsMargins(40, 10, 40, 0)
+        recent_layout.setSpacing(8)
+        recent_label = QLabel("Recent Activity")
+        recent_label.setFont(QFont('Arial', 16, QFont.Weight.Bold))
+        recent_label.setStyleSheet("color: white;")
+        recent_layout.addWidget(recent_label)
+        self.recent_table = QTableWidget()
+        self.recent_table.setColumnCount(4)
+        self.recent_table.setHorizontalHeaderLabels(["Type", "Description", "Amount", "Time"])
+        self.recent_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.recent_table.setStyleSheet("background: white; color: #0a2a66; font-size: 15px; border-radius: 8px;")
+        self.recent_table.setFixedHeight(180)
+        recent_layout.addWidget(self.recent_table)
+        main_layout.addWidget(recent_widget)
+        # --- Welcome Message ---
         welcome = QLabel("\nWelcome to Kayan Point of Sale\n\nClick a menu above to open a module.")
         welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
         welcome.setFont(QFont('Arial', 22, QFont.Weight.Bold))
@@ -1108,6 +1180,83 @@ class ClassicMainWindow(QMainWindow):
         main_layout.addWidget(welcome)
         main_layout.addStretch()
         self.setCentralWidget(main_panel)
+        # Load dashboard data
+        self.update_dashboard()
+        # Timer for date/time
+        from PyQt6.QtCore import QTimer
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_datetime)
+        self.timer.start(60000)  # update every minute
+
+    def _make_dashboard_card(self, title, value):
+        card = QWidget()
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(2)
+        label = QLabel(title)
+        label.setStyleSheet("color: #e3eafc; font-size: 15px; font-weight: bold;")
+        value_label = QLabel(value)
+        value_label.setStyleSheet("color: white; font-size: 22px; font-weight: bold;")
+        layout.addWidget(label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(value_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        card.value_label = value_label
+        card.setStyleSheet("background: #1976d2; border-radius: 12px;")
+        return card
+
+    def update_dashboard(self):
+        import sqlite3
+        from datetime import date
+        today = date.today().strftime('%Y-%m-%d')
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            # Today's sales
+            cursor.execute("SELECT SUM(total_amount) FROM sales WHERE date = ?", (today,))
+            sales_today = cursor.fetchone()[0] or 0.0
+            self.sales_today_label.value_label.setText(f"${sales_today:,.2f}")
+            # Transactions today
+            cursor.execute("SELECT COUNT(*) FROM sales WHERE date = ?", (today,))
+            transactions_today = cursor.fetchone()[0] or 0
+            self.transactions_today_label.value_label.setText(str(transactions_today))
+            # Low stock
+            cursor.execute("SELECT COUNT(*) FROM products WHERE stock_quantity <= 10")
+            low_stock = cursor.fetchone()[0] or 0
+            self.low_stock_label.value_label.setText(str(low_stock))
+            # Top selling product (today)
+            cursor.execute("""
+                SELECT p.name, SUM(si.quantity) as total_qty
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                JOIN sales s ON si.sale_id = s.id
+                WHERE s.date = ?
+                GROUP BY p.name
+                ORDER BY total_qty DESC
+                LIMIT 1
+            """, (today,))
+            row = cursor.fetchone()
+            if row:
+                self.top_product_label.value_label.setText(row[0])
+            else:
+                self.top_product_label.value_label.setText("-")
+            # Recent activity (last 5 sales)
+            cursor.execute("SELECT id, total_amount, date, time FROM sales ORDER BY date DESC, time DESC LIMIT 5")
+            sales = cursor.fetchall()
+            self.recent_table.setRowCount(0)
+            for i, sale in enumerate(sales):
+                self.recent_table.insertRow(i)
+                self.recent_table.setItem(i, 0, QTableWidgetItem("Sale"))
+                self.recent_table.setItem(i, 1, QTableWidgetItem(f"Sale #{sale[0]}"))
+                self.recent_table.setItem(i, 2, QTableWidgetItem(f"${sale[1]:,.2f}"))
+                self.recent_table.setItem(i, 3, QTableWidgetItem(f"{sale[2]} {sale[3]}"))
+        except Exception as e:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def update_datetime(self):
+        from datetime import datetime
+        self.datetime_label.setText(datetime.now().strftime("%A, %d %B %Y %H:%M"))
 
     def menu_clicked(self, label):
         if label == 'POS':
