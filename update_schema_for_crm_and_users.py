@@ -28,8 +28,33 @@ def update_schema():
         )
         """)
 
+        # Create the 'stores' table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            address TEXT,
+            phone TEXT
+        )
+        ''')
+
+        # Add store_id to users
+        cursor.execute('''
+        ALTER TABLE users ADD COLUMN store_id INTEGER REFERENCES stores(id)
+        ''')
+
+        # Add store_id to products
+        cursor.execute('''
+        ALTER TABLE products ADD COLUMN store_id INTEGER REFERENCES stores(id)
+        ''')
+
+        # Add store_id to sales
+        cursor.execute('''
+        ALTER TABLE sales ADD COLUMN store_id INTEGER REFERENCES stores(id)
+        ''')
+
         conn.commit()
-        print("Successfully created 'customers' and 'users' tables.")
+        print("Successfully created 'customers', 'users', 'stores' tables and updated schema for multi-store support.")
 
     except sqlite3.Error as e:
         print(f"Database error: {e}")

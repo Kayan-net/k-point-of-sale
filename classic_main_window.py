@@ -1,12 +1,27 @@
 import sys
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog, QGridLayout, QDialogButtonBox, QTableWidget, QTableWidgetItem, QLineEdit, QHeaderView, QComboBox, QDateEdit, QMessageBox, QCompleter, QInputDialog
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog, QGridLayout, QDialogButtonBox, QTableWidget, QTableWidgetItem, QLineEdit, QHeaderView, QComboBox, QDateEdit, QMessageBox, QCompleter, QInputDialog, QFormLayout, QFileDialog
 )
 from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtCore import Qt, QStringListModel
 from datetime import datetime
 import sqlite3
 import hashlib
+import os
+
+try:
+    import qrcode
+    from PIL import ImageQt
+    QR_LIBS_AVAILABLE = True
+except ImportError:
+    QR_LIBS_AVAILABLE = False
+
+try:
+    import cv2
+    from pyzbar.pyzbar import decode as qr_decode
+    QR_SCAN_AVAILABLE = True
+except ImportError:
+    QR_SCAN_AVAILABLE = False
 
 # Sample icons from Qt (can be replaced with custom icons)
 ICON_MAP = {
@@ -1069,9 +1084,184 @@ class ClassicMenuDialog(QDialog):
             win.show()
             win.raise_()
             win.activateWindow()
+        elif module_name in ["Store Info"]:
+            self.close()
+            self.open_store_info_dialog()
         else:
             dlg = ModuleWindow(module_name, self)
             dlg.exec()
+
+class StoreInfoDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Store Information")
+        self.setMinimumWidth(400)
+        layout = QFormLayout(self)
+        self.name_input = QLineEdit()
+        self.address_input = QLineEdit()
+        self.phone_input = QLineEdit()
+        layout.addRow("Store Name:", self.name_input)
+        layout.addRow("Address:", self.address_input)
+        layout.addRow("Phone:", self.phone_input)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addRow(self.buttons)
+
+    def set_data(self, name, address, phone):
+        self.name_input.setText(name)
+        self.address_input.setText(address)
+        self.phone_input.setText(phone)
+
+    def get_data(self):
+        return self.name_input.text(), self.address_input.text(), self.phone_input.text()
+
+class UserForm(QDialog):
+    def __init__(self, user=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add/Edit User")
+        self.layout = QFormLayout(self)
+        self.username_input = QLineEdit(user[1] if user else "")
+        self.password_input = QLineEdit("") # Never pre-fill passwords
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.role_combo = QComboBox()
+        self.role_combo.addItems(["Admin", "Manager", "User"])
+        if user: self.role_combo.setCurrentText(user[3])
+        self.layout.addRow("Username:", self.username_input)
+        self.layout.addRow("Password:", self.password_input)
+        self.layout.addRow("Role:", self.role_combo)
+        self.store_combo = QComboBox()
+        self.layout.addRow("Store:", self.store_combo)
+        self.load_stores()
+        if user and len(user) > 4 and user[4]:
+            idx = self.store_combo.findData(user[4])
+            if idx >= 0:
+                self.store_combo.setCurrentIndex(idx)
+        self.qr_button = QPushButton("Show QR Code")
+        self.qr_button.setVisible(False)
+        self.qr_button.clicked.connect(self.show_qr_code)
+        self.id_card_button = QPushButton("Generate ID Card")
+        self.id_card_button.setVisible(False)
+        self.id_card_button.clicked.connect(self.show_id_card)
+        self.layout.addRow(self.qr_button)
+        self.layout.addRow(self.id_card_button)
+        self.role_combo.currentTextChanged.connect(self.update_qr_button_visibility)
+        self.update_qr_button_visibility(self.role_combo.currentText())
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addRow(self.buttons)
+    def load_stores(self):
+        import sqlite3
+        self.store_combo.clear()
+        conn = sqlite3.connect('pos_system.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM stores")
+        for store_id, name in cursor.fetchall():
+            self.store_combo.addItem(name, store_id)
+        conn.close()
+    def get_data(self):
+        return {
+            "username": self.username_input.text(),
+            "password": self.password_input.text(),
+            "role": self.role_combo.currentText(),
+            "store_id": self.store_combo.currentData()
+        }
+
+def generate_user_qr_code(username):
+    import qrcode
+    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr.add_data(username)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    return img
+
+def generate_id_card(username, role, store_name):
+    from PIL import Image, ImageDraw, ImageFont
+    import qrcode
+    # Card size
+    width, height = 400, 220
+    card = Image.new('RGB', (width, height), 'white')
+    draw = ImageDraw.Draw(card)
+    # Store name
+    if store_name:
+        draw.text((20, 10), store_name, fill='#0a2a66')
+    # User info
+    draw.text((20, 50), f"Name: {username}", fill='black')
+    draw.text((20, 80), f"Role: {role}", fill='black')
+    # QR code
+    qr = qrcode.QRCode(version=1, box_size=4, border=1)
+    qr.add_data(username)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    qr_img = qr_img.resize((100, 100))
+    card.paste(qr_img, (width-120, 50))
+    # Border
+    draw.rectangle([0, 0, width-1, height-1], outline='#0a2a66', width=3)
+    return card
+
+class QRScanDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Scan Admin/Manager QR Code")
+        self.setMinimumWidth(400)
+        layout = QVBoxLayout(self)
+        self.result = None
+        self.info_label = QLabel("Scan a QR code with your webcam or upload an image.")
+        layout.addWidget(self.info_label)
+        self.scan_btn = QPushButton("Scan with Webcam")
+        self.scan_btn.clicked.connect(self.scan_webcam)
+        layout.addWidget(self.scan_btn)
+        self.upload_btn = QPushButton("Upload QR Image")
+        self.upload_btn.clicked.connect(self.upload_image)
+        layout.addWidget(self.upload_btn)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(self.cancel_btn)
+    def scan_webcam(self):
+        if not QR_SCAN_AVAILABLE:
+            QMessageBox.warning(self, "QR Scan", "OpenCV or pyzbar not installed. Please install with 'pip install opencv-python pyzbar'.")
+            return
+        cap = cv2.VideoCapture(0)
+        found = False
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            decoded_objs = qr_decode(frame)
+            for obj in decoded_objs:
+                self.result = obj.data.decode('utf-8')
+                found = True
+                break
+            cv2.imshow('Scan QR Code - Press Q to quit', frame)
+            if found or cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        cap.release()
+        cv2.destroyAllWindows()
+        if found:
+            self.accept()
+    def upload_image(self):
+        from PyQt6.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select QR Code Image", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
+        if not file_path:
+            return
+        from PIL import Image
+        img = Image.open(file_path)
+        decoded_objs = qr_decode(img)
+        if decoded_objs:
+            self.result = decoded_objs[0].data.decode('utf-8')
+            self.accept()
+        else:
+            QMessageBox.warning(self, "QR Scan", "No QR code found in the image.")
+
+def is_admin_manager_qr(username):
+    import sqlite3
+    conn = sqlite3.connect('pos_system.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT role FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    return row and row[0] in ["Admin", "Manager"]
 
 class ClassicMainWindow(QMainWindow):
     def __init__(self):
@@ -1116,7 +1306,7 @@ class ClassicMainWindow(QMainWindow):
         dashboard_layout.addWidget(self.top_product_label)
         dashboard_layout.addStretch()
         # User info and date/time
-        user_info = QLabel(f"User: {current_user if current_user else '-'}")
+        user_info = QLabel(f"User: {current_user if current_user else '-'} ({current_user_role if current_user_role else '-'})")
         user_info.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
         from datetime import datetime
         self.datetime_label = QLabel(datetime.now().strftime("%A, %d %B %Y %H:%M"))
@@ -1187,6 +1377,18 @@ class ClassicMainWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_datetime)
         self.timer.start(60000)  # update every minute
+        self.store_name_label = QLabel("")
+        self.store_address_label = QLabel("")
+        self.store_phone_label = QLabel("")
+        self.store_name_label.setStyleSheet("color: #e3eafc; font-size: 18px; font-weight: bold;")
+        self.store_address_label.setStyleSheet("color: #e3eafc; font-size: 14px;")
+        self.store_phone_label.setStyleSheet("color: #e3eafc; font-size: 14px;")
+        main_layout.insertWidget(1, self.store_name_label)
+        main_layout.insertWidget(2, self.store_address_label)
+        main_layout.insertWidget(3, self.store_phone_label)
+        self.load_store_info()
+        self.current_store_id = None
+        self.current_store_name = None
 
     def _make_dashboard_card(self, title, value):
         card = QWidget()
@@ -1259,6 +1461,29 @@ class ClassicMainWindow(QMainWindow):
         self.datetime_label.setText(datetime.now().strftime("%A, %d %B %Y %H:%M"))
 
     def menu_clicked(self, label):
+        restricted_labels = [
+            'Stock', 'Purchases', 'Accounts', 'Directory', 'Maintenance', 'Users Settings', 'Add/Modify Users', 'System Settings', 'Files Reindex', 'Files Export / Import', 'Restore From Backup', 'Tax File Maintenance', 'Default Accounts Setup', 'Clear Data Files', 'StoreInfo'
+        ]
+        if label in restricted_labels and current_user_role not in ["Admin", "Manager"]:
+            # Prompt for QR code scan
+            dlg = QRScanDialog(self)
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result:
+                if is_admin_manager_qr(dlg.result):
+                    QMessageBox.information(self, "Access Granted", f"Admin/Manager '{dlg.result}' authorized.")
+                else:
+                    QMessageBox.warning(self, "Access Denied", "QR code does not belong to an Admin or Manager user.")
+                    return
+            else:
+                QMessageBox.warning(self, "Access Denied", "You do not have permission to access this feature.")
+                return
+        # Only Admin/Manager can open user management
+        if label in ['Users Settings', 'Add/Modify Users'] and current_user_role not in ["Admin", "Manager"]:
+            QMessageBox.warning(self, "Access Denied", "Only Admin or Manager can manage users.")
+            return
+        # Only POS is allowed for normal users
+        if current_user_role == "User" and label not in ["POS", "Exit"]:
+            QMessageBox.warning(self, "Access Denied", "You do not have permission to access this feature.")
+            return
         if label == 'POS':
             actions = [
                 ("Point of Sale", 'POS'),
@@ -1392,6 +1617,8 @@ class ClassicMainWindow(QMainWindow):
                 ("Tax File Maintenance", 'Maintenance'),
                 ("Default Accounts Setup", 'Accounts'),
                 ("Clear Data Files", 'Maintenance'),
+                ("Store Info", 'StoreInfo'),
+                ("Store Management", 'Store Management'),
             ]
             reports = []
             dlg = ClassicMenuDialog("Maintenance Menu", actions, reports, self)
@@ -1413,6 +1640,194 @@ class ClassicMainWindow(QMainWindow):
             dlg.exec()
         elif label == 'Exit':
             self.close()
+        elif label == 'StoreInfo':
+            self.open_store_info_dialog()
+        elif label == 'Store Management':
+            dlg = StoreManagementDialog(self)
+            dlg.exec()
+
+    def load_store_info(self):
+        import sqlite3
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS store_info (id INTEGER PRIMARY KEY, name TEXT, address TEXT, phone TEXT)")
+            cursor.execute("SELECT name, address, phone FROM store_info WHERE id=1")
+            row = cursor.fetchone()
+            if row:
+                self.store_name_label.setText(row[0])
+                self.store_address_label.setText(row[1])
+                self.store_phone_label.setText(row[2])
+            else:
+                self.store_name_label.setText("")
+                self.store_address_label.setText("")
+                self.store_phone_label.setText("")
+        except Exception:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def open_store_info_dialog(self):
+        import sqlite3
+        dlg = StoreInfoDialog(self)
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, address, phone FROM store_info WHERE id=1")
+            row = cursor.fetchone()
+            if row:
+                dlg.set_data(row[0], row[1], row[2])
+        except Exception:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name, address, phone = dlg.get_data()
+            try:
+                conn = sqlite3.connect('pos_system.db')
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR REPLACE INTO store_info (id, name, address, phone) VALUES (1, ?, ?, ?)", (name, address, phone))
+                conn.commit()
+            except Exception:
+                pass
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+            self.load_store_info()
+
+class StoreManagementDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Store Management")
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["ID", "Name", "Address", "Phone"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        btn_layout = QHBoxLayout()
+        add_btn = QPushButton("Add Store")
+        add_btn.clicked.connect(self.add_store)
+        edit_btn = QPushButton("Edit Store")
+        edit_btn.clicked.connect(self.edit_store)
+        del_btn = QPushButton("Delete Store")
+        del_btn.clicked.connect(self.delete_store)
+        btn_layout.addWidget(add_btn)
+        btn_layout.addWidget(edit_btn)
+        btn_layout.addWidget(del_btn)
+        layout.addLayout(btn_layout)
+        self.load_stores()
+    def load_stores(self):
+        import sqlite3
+        self.table.setRowCount(0)
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, address, phone FROM stores")
+            rows = cursor.fetchall()
+            for i, row in enumerate(rows):
+                self.table.insertRow(i)
+                for j, val in enumerate(row):
+                    self.table.setItem(i, j, QTableWidgetItem(str(val)))
+            conn.close()
+        except Exception:
+            pass
+    def add_store(self):
+        dlg = StoreEditDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name, address, phone = dlg.get_data()
+            import sqlite3
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO stores (name, address, phone) VALUES (?, ?, ?)", (name, address, phone))
+            conn.commit()
+            conn.close()
+            self.load_stores()
+    def edit_store(self):
+        row = self.table.currentRow()
+        if row == -1:
+            QMessageBox.warning(self, "Edit Store", "Select a store to edit.")
+            return
+        store_id = int(self.table.item(row, 0).text())
+        name = self.table.item(row, 1).text()
+        address = self.table.item(row, 2).text()
+        phone = self.table.item(row, 3).text()
+        dlg = StoreEditDialog(self)
+        dlg.set_data(name, address, phone)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_name, new_address, new_phone = dlg.get_data()
+            import sqlite3
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("UPDATE stores SET name=?, address=?, phone=? WHERE id=?", (new_name, new_address, new_phone, store_id))
+            conn.commit()
+            conn.close()
+            self.load_stores()
+    def delete_store(self):
+        row = self.table.currentRow()
+        if row == -1:
+            QMessageBox.warning(self, "Delete Store", "Select a store to delete.")
+            return
+        store_id = int(self.table.item(row, 0).text())
+        confirm = QMessageBox.question(self, "Delete Store", f"Delete store ID {store_id}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if confirm == QMessageBox.StandardButton.Yes:
+            import sqlite3
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM stores WHERE id=?", (store_id,))
+            conn.commit()
+            conn.close()
+            self.load_stores()
+
+class StoreEditDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Store Info")
+        layout = QFormLayout(self)
+        self.name_input = QLineEdit()
+        self.address_input = QLineEdit()
+        self.phone_input = QLineEdit()
+        layout.addRow("Name:", self.name_input)
+        layout.addRow("Address:", self.address_input)
+        layout.addRow("Phone:", self.phone_input)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addRow(self.buttons)
+    def set_data(self, name, address, phone):
+        self.name_input.setText(name)
+        self.address_input.setText(address)
+        self.phone_input.setText(phone)
+    def get_data(self):
+        return self.name_input.text(), self.address_input.text(), self.phone_input.text()
+
+class StoreSelectDialog(QDialog):
+    def __init__(self, user_id, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Store")
+        self.setMinimumWidth(350)
+        layout = QVBoxLayout(self)
+        self.store_combo = QComboBox()
+        import sqlite3
+        conn = sqlite3.connect('pos_system.db')
+        cursor = conn.cursor()
+        # For now, show all stores (can be filtered by user permissions later)
+        cursor.execute("SELECT id, name FROM stores")
+        self.stores = cursor.fetchall()
+        for store_id, name in self.stores:
+            self.store_combo.addItem(name, store_id)
+        conn.close()
+        layout.addWidget(QLabel("Select a store for this session:"))
+        layout.addWidget(self.store_combo)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+    def get_selected_store(self):
+        return self.store_combo.currentData(), self.store_combo.currentText()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
