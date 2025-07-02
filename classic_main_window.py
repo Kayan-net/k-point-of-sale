@@ -346,6 +346,23 @@ class POSWindow(QMainWindow):
         except ValueError:
             QMessageBox.warning(self, "Input Error", "Price must be a number.")
             return
+        # Fetch cost price for this product
+        cost_price = None
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT cost_price FROM products WHERE barcode = ?", (part,))
+            result = cursor.fetchone()
+            if result:
+                cost_price = result[0]
+        except Exception:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+        if cost_price is not None and price < cost_price:
+            QMessageBox.warning(self, "Price Error", f"Selling price ({price}) cannot be less than cost price ({cost_price}).")
+            return
         disc = 0.0
         total = qty * price * (1 - disc/100)
         row = self.table.rowCount()
@@ -502,8 +519,8 @@ class StockWindow(QMainWindow):
         layout.addWidget(controls_row)
         # Product Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["ID", "Name", "Barcode", "Category", "Price", "Stock"])
+        self.table.setColumnCount(8)
+        self.table.setHorizontalHeaderLabels(["ID", "Name", "Barcode", "Category", "Cost Price", "Wholesale Price", "Retail Price", "Stock"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setStyleSheet("background: white; color: #0a2a66; font-size: 18px; border-radius: 8px;")
         layout.addWidget(self.table)
@@ -525,12 +542,16 @@ class StockWindow(QMainWindow):
         del_btn = QPushButton("Delete Product")
         del_btn.setFont(QFont('Arial', 16, QFont.Weight.Bold))
         del_btn.setStyleSheet("background: #d32f2f; color: white; border-radius: 8px; font-size: 16px; padding: 8px 24px;")
-        del_btn.clicked.connect(self.delete_product)
-        for btn in [add_btn, edit_btn, del_btn]:
+        close_btn = QPushButton("Close")
+        close_btn.setFont(QFont('Arial', 16, QFont.Weight.Bold))
+        close_btn.setStyleSheet("background: #888; color: white; border-radius: 8px; font-size: 16px; padding: 8px 24px;")
+        close_btn.clicked.connect(self.close)
+        for btn in [add_btn, edit_btn, del_btn, close_btn]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_layout.addWidget(add_btn)
         btn_layout.addWidget(edit_btn)
         btn_layout.addWidget(del_btn)
+        btn_layout.addWidget(close_btn)
         btn_layout.addStretch()
         layout.addWidget(btn_row)
         self.setCentralWidget(central)
@@ -558,10 +579,10 @@ class StockWindow(QMainWindow):
         try:
             conn = sqlite3.connect('pos_system.db')
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT p.id, p.name, p.barcode, c.name, p.price, p.stock_quantity
+            cursor.execute('''
+                SELECT p.id, p.name, p.barcode, c.name, p.cost_price, p.wholesale_price, p.price, p.stock_quantity
                 FROM products p LEFT JOIN categories c ON p.category_id = c.id
-            """)
+            ''')
             self.products = cursor.fetchall()
             self.show_products(self.products)
         except Exception as e:
@@ -578,7 +599,7 @@ class StockWindow(QMainWindow):
             self.table.insertRow(row_num)
             for col_num, data in enumerate(product):
                 item = QTableWidgetItem(str(data))
-                if col_num == 5 and int(data) <= 10:
+                if col_num == 7 and int(data) <= 10:  # Stock column
                     item.setBackground(Qt.GlobalColor.yellow)
                 self.table.setItem(row_num, col_num, item)
 
@@ -586,18 +607,19 @@ class StockWindow(QMainWindow):
         text = self.search_input.text().lower()
         cat_id = self.cat_filter.currentData()
         filtered = self.products
-        if cat_id:
-            filtered = [p for p in filtered if p[3] == self.cat_filter.currentText()]
+        if cat_id is not None:
+            if cat_id:  # Only filter if a specific category is selected
+                filtered = [p for p in filtered if p[3] == self.cat_filter.currentText()]
         if text:
             filtered = [p for p in filtered if text in str(p[0]).lower() or text in p[1].lower() or text in str(p[2]).lower()]
         self.show_products(filtered)
 
     def show_low_stock(self):
-        low_stock = [p for p in self.products if int(p[5]) <= 10]
+        low_stock = [p for p in self.products if int(p[7]) <= 10]
         self.show_products(low_stock)
 
     def update_low_stock_label(self):
-        count = sum(1 for p in self.products if int(p[5]) <= 10)
+        count = sum(1 for p in self.products if int(p[7]) <= 10)
         self.low_stock_label.setText(f"Low Stock: {count}")
 
     def export_csv(self):
@@ -659,10 +681,12 @@ class StockWindow(QMainWindow):
             try:
                 conn = sqlite3.connect('pos_system.db')
                 cursor = conn.cursor()
-                cursor.execute("INSERT INTO products (name, barcode, category_id, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", (
+                cursor.execute("INSERT INTO products (name, barcode, category_id, cost_price, wholesale_price, price, stock_quantity) VALUES (?, ?, ?, ?, ?, ?, ?)", (
                     data['name'],
                     data['barcode'],
                     data['category_id'],
+                    data['cost_price'],
+                    data['wholesale_price'],
                     data['price'],
                     data['stock']
                 ))
@@ -683,7 +707,7 @@ class StockWindow(QMainWindow):
         try:
             conn = sqlite3.connect('pos_system.db')
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, barcode, category_id, price, stock_quantity FROM products WHERE id = ?", (product_id,))
+            cursor.execute("SELECT id, name, barcode, category_id, cost_price, wholesale_price, price, stock_quantity FROM products WHERE id = ?", (product_id,))
             product = cursor.fetchone()
         except Exception as e:
             QMessageBox.warning(self, "Database Error", str(e))
@@ -698,7 +722,7 @@ class StockWindow(QMainWindow):
                 try:
                     conn = sqlite3.connect('pos_system.db')
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE products SET name=?, barcode=?, category_id=?, price=?, stock_quantity=? WHERE id=?", (data['name'], data['barcode'], data['category_id'], data['price'], data['stock'], product_id))
+                    cursor.execute("UPDATE products SET name=?, barcode=?, category_id=?, cost_price=?, wholesale_price=?, price=?, stock_quantity=? WHERE id=?", (data['name'], data['barcode'], data['category_id'], data['cost_price'], data['wholesale_price'], data['price'], data['stock'], product_id))
                     conn.commit()
                 except Exception as e:
                     QMessageBox.warning(self, "Database Error", str(e))
@@ -737,7 +761,7 @@ class ProductDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Product Details")
         self.setStyleSheet("background-color: #0a2a66; color: white; border-radius: 12px;")
-        self.setFixedSize(400, 400)
+        self.setFixedSize(400, 500)
         layout = QVBoxLayout(self)
         name_label = QLabel("Name:")
         name_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
@@ -759,13 +783,21 @@ class ProductDialog(QDialog):
             idx = self.cat_combo.findData(product[3])
             if idx != -1:
                 self.cat_combo.setCurrentIndex(idx)
-        price_label = QLabel("Price:")
+        cost_price_label = QLabel("Cost Price:")
+        cost_price_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
+        self.cost_price_input = QLineEdit(str(product[4]) if product and len(product) > 4 and product[4] is not None else "")
+        self.cost_price_input.setFont(QFont('Arial', 14))
+        wholesale_price_label = QLabel("Wholesale Price:")
+        wholesale_price_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
+        self.wholesale_price_input = QLineEdit(str(product[5]) if product and len(product) > 5 and product[5] is not None else "")
+        self.wholesale_price_input.setFont(QFont('Arial', 14))
+        price_label = QLabel("Retail Price:")
         price_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
-        self.price_input = QLineEdit(str(product[4]) if product else "")
+        self.price_input = QLineEdit(str(product[6]) if product and len(product) > 6 and product[6] is not None else "")
         self.price_input.setFont(QFont('Arial', 14))
         stock_label = QLabel("Stock:")
         stock_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
-        self.stock_input = QLineEdit(str(product[5]) if product else "")
+        self.stock_input = QLineEdit(str(product[7]) if product and len(product) > 7 and product[7] is not None else "")
         self.stock_input.setFont(QFont('Arial', 14))
         layout.addWidget(name_label)
         layout.addWidget(self.name_input)
@@ -773,11 +805,20 @@ class ProductDialog(QDialog):
         layout.addWidget(self.barcode_input)
         layout.addWidget(cat_label)
         layout.addWidget(self.cat_combo)
+        layout.addWidget(cost_price_label)
+        layout.addWidget(self.cost_price_input)
+        layout.addWidget(wholesale_price_label)
+        layout.addWidget(self.wholesale_price_input)
         layout.addWidget(price_label)
         layout.addWidget(self.price_input)
         layout.addWidget(stock_label)
         layout.addWidget(self.stock_input)
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        for btn in [btns.button(QDialogButtonBox.StandardButton.Ok), btns.button(QDialogButtonBox.StandardButton.Cancel)]:
+            btn.setMinimumHeight(40)
+            btn.setMinimumWidth(100)
+            btn.setFont(QFont('Arial', 14, QFont.Weight.Bold))
+            btn.setStyleSheet("background: #1976d2; color: white; border-radius: 8px; font-size: 16px; margin: 8px;")
         btns.accepted.connect(self.validate_and_accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
@@ -786,18 +827,27 @@ class ProductDialog(QDialog):
         try:
             name = self.name_input.text().strip()
             barcode = self.barcode_input.text().strip()
+            cost_price = float(self.cost_price_input.text())
+            wholesale_price = float(self.wholesale_price_input.text())
             price = float(self.price_input.text())
             stock = int(self.stock_input.text())
-            # category_id can be None
+            if price < cost_price:
+                QMessageBox.warning(self, "Input Error", "Retail price cannot be less than cost price.")
+                return
+            if wholesale_price < cost_price:
+                QMessageBox.warning(self, "Input Error", "Wholesale price cannot be less than cost price.")
+                return
             self.accept()
         except Exception:
-            QMessageBox.warning(self, "Input Error", "Please fill all fields correctly. Price and Stock must be numbers.")
+            QMessageBox.warning(self, "Input Error", "Please fill all fields correctly. Prices and Stock must be numbers.")
 
     def get_data(self):
         return {
             'name': self.name_input.text(),
             'barcode': self.barcode_input.text(),
             'category_id': self.cat_combo.currentData() if self.cat_combo.currentData() is not None else None,
+            'cost_price': float(self.cost_price_input.text()),
+            'wholesale_price': float(self.wholesale_price_input.text()),
             'price': float(self.price_input.text()),
             'stock': int(self.stock_input.text())
         }
@@ -1090,6 +1140,35 @@ class ClassicMenuDialog(QDialog):
         else:
             dlg = ModuleWindow(module_name, self)
             dlg.exec()
+
+    def open_store_info_dialog(self):
+        import sqlite3
+        dlg = StoreInfoDialog(self)
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, address, phone FROM store_info WHERE id=1")
+            row = cursor.fetchone()
+            if row:
+                dlg.set_data(row[0], row[1], row[2])
+        except Exception:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name, address, phone = dlg.get_data()
+            try:
+                conn = sqlite3.connect('pos_system.db')
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR REPLACE INTO store_info (id, name, address, phone) VALUES (1, ?, ?, ?)", (name, address, phone))
+                conn.commit()
+            except Exception:
+                pass
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+            self.load_store_info()
 
 class StoreInfoDialog(QDialog):
     def __init__(self, parent=None):

@@ -56,6 +56,18 @@ def update_schema():
         if 'category_id' not in columns:
             cursor.execute("ALTER TABLE products ADD COLUMN category_id INTEGER REFERENCES categories(id)")
 
+        # Add cost_price to products if not present
+        cursor.execute("PRAGMA table_info(products)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'cost_price' not in columns:
+            cursor.execute("ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0.0")
+
+        # Add wholesale_price to products if not present
+        cursor.execute("PRAGMA table_info(products)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'wholesale_price' not in columns:
+            cursor.execute("ALTER TABLE products ADD COLUMN wholesale_price REAL DEFAULT 0.0")
+
         conn.commit()
         print("Successfully created 'chart_of_accounts', 'journal_entries', and 'journal_entry_items' tables.")
         print("Successfully created/updated 'categories' table and 'category_id' in products.")
