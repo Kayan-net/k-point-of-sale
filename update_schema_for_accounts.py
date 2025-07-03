@@ -68,6 +68,14 @@ def update_schema():
         if 'wholesale_price' not in columns:
             cursor.execute("ALTER TABLE products ADD COLUMN wholesale_price REAL DEFAULT 0.0")
 
+        # Add company_reg_no and vat_number to store_info if not present
+        cursor.execute("PRAGMA table_info(store_info)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'company_reg_no' not in columns:
+            cursor.execute("ALTER TABLE store_info ADD COLUMN company_reg_no TEXT")
+        if 'vat_number' not in columns:
+            cursor.execute("ALTER TABLE store_info ADD COLUMN vat_number TEXT")
+
         conn.commit()
         print("Successfully created 'chart_of_accounts', 'journal_entries', and 'journal_entry_items' tables.")
         print("Successfully created/updated 'categories' table and 'category_id' in products.")

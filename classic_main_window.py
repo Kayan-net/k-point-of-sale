@@ -1,9 +1,9 @@
 import sys
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog, QGridLayout, QDialogButtonBox, QTableWidget, QTableWidgetItem, QLineEdit, QHeaderView, QComboBox, QDateEdit, QMessageBox, QCompleter, QInputDialog, QFormLayout, QFileDialog
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QDialog, QGridLayout, QDialogButtonBox, QTableWidget, QTableWidgetItem, QLineEdit, QHeaderView, QComboBox, QDateEdit, QMessageBox, QCompleter, QInputDialog, QFormLayout, QFileDialog, QSizePolicy
 )
 from PyQt6.QtGui import QIcon, QFont
-from PyQt6.QtCore import Qt, QStringListModel
+from PyQt6.QtCore import Qt, QStringListModel, QTimer, QTime
 from datetime import datetime
 import sqlite3
 import hashlib
@@ -83,16 +83,25 @@ class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Login")
-        self.setGeometry(400, 300, 300, 150)
+        self.setFixedSize(420, 240)
+        self.setStyleSheet("background-color: #23272e; color: #fff; border-radius: 14px;")
         self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(22)
+        self.layout.setContentsMargins(28, 28, 28, 28)
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Username")
+        self.username_input.setFont(QFont('Arial', 16))
+        self.username_input.setStyleSheet("background: #181a20; color: #fff; border-radius: 8px; padding: 10px 14px; font-size: 16px;")
         self.layout.addWidget(self.username_input)
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setFont(QFont('Arial', 16))
+        self.password_input.setStyleSheet("background: #181a20; color: #fff; border-radius: 8px; padding: 10px 14px; font-size: 16px;")
         self.layout.addWidget(self.password_input)
         login_button = QPushButton("Login")
+        login_button.setFont(QFont('Arial', 16, QFont.Weight.Bold))
+        login_button.setStyleSheet("background: #388e3c; color: #fff; border-radius: 8px; padding: 12px 0; font-size: 18px;")
         login_button.clicked.connect(self.check_login)
         self.layout.addWidget(login_button)
         # Add a default admin user if no users exist
@@ -169,6 +178,16 @@ class POSWindow(QMainWindow):
         self.client.setFixedWidth(200)
         self.client.setStyleSheet("background: #e3eafc; color: #0a2a66; border-radius: 6px; padding: 4px;")
         self.client.setToolTip("Enter client number or name")
+        # Customer Type
+        cust_type_label = QLabel("Customer Type:")
+        cust_type_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.cust_type_combo = QComboBox()
+        self.cust_type_combo.setFont(QFont('Arial', 13))
+        self.cust_type_combo.addItems(["Retail", "Wholesale"])
+        self.cust_type_combo.setFixedWidth(120)
+        self.cust_type_combo.setToolTip("Select customer type for pricing")
+        info_layout.addWidget(cust_type_label)
+        info_layout.addWidget(self.cust_type_combo)
         info_layout.addWidget(invoice_label)
         info_layout.addWidget(self.invoice_no)
         info_layout.addSpacing(30)
@@ -229,6 +248,12 @@ class POSWindow(QMainWindow):
         add_btn.setToolTip("Add item to sale")
         add_btn.clicked.connect(self.add_item)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        # Cost price label (read-only)
+        self.cost_price_label = QLabel("")
+        self.cost_price_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.cost_price_label.setStyleSheet("color: #b0c4de; margin-left: 8px;")
+        entry_layout.addWidget(self.cost_price_label)
         entry_layout.addWidget(part_label)
         entry_layout.addWidget(self.part_input)
         entry_layout.addWidget(desc_label)
@@ -316,6 +341,8 @@ class POSWindow(QMainWindow):
         print_btn.setShortcut('F3')
         close_btn.setShortcut('Esc')
         self.part_input.returnPressed.connect(self.lookup_product)
+        self.part_input.textChanged.connect(self.lookup_product_on_typing)
+        self.desc_input.textEdited.connect(self.lookup_by_description)
         self.setCentralWidget(central)
         self.showMaximized()
 
@@ -401,27 +428,42 @@ class POSWindow(QMainWindow):
         change = cash - total
         self.change.setText(f"{change:.2f}")
 
-    def lookup_product(self):
+    def lookup_product(self, show_warning=True):
         barcode = self.part_input.text().strip()
         if not barcode:
             return
         try:
             conn = sqlite3.connect('pos_system.db')
             cursor = conn.cursor()
-            cursor.execute("SELECT name, price FROM products WHERE barcode = ?", (barcode,))
+            cursor.execute("SELECT name, cost_price, wholesale_price, price FROM products WHERE barcode = ?", (barcode,))
             result = cursor.fetchone()
             if result:
                 self.desc_input.setText(result[0])
-                self.price_input.setText(str(result[1]))
+                cost_price = result[1] if result[1] is not None else 0.0
+                wholesale_price = result[2] if result[2] is not None else 0.0
+                retail_price = result[3] if result[3] is not None else 0.0
+                self.cost_price_label.setText(f"Cost: {cost_price}")
+                self.price_input.setToolTip(f"Unit price (Cost: {cost_price})")
+                # Set price based on customer type
+                if self.cust_type_combo.currentText() == "Wholesale":
+                    self.price_input.setText(str(wholesale_price))
+                else:
+                    self.price_input.setText(str(retail_price))
             else:
-                QMessageBox.warning(self, "Product Not Found", f"No product found for barcode/part number: {barcode}")
                 self.desc_input.clear()
                 self.price_input.clear()
+                self.cost_price_label.setText("")
+                if show_warning:
+                    QMessageBox.warning(self, "Product Not Found", f"No product found for barcode/part number: {barcode}")
         except Exception as e:
-            QMessageBox.warning(self, "Database Error", str(e))
+            if show_warning:
+                QMessageBox.warning(self, "Database Error", str(e))
         finally:
             if 'conn' in locals():
                 conn.close()
+
+    def lookup_product_on_typing(self):
+        self.lookup_product(show_warning=False)
 
     def update_completer(self, text):
         if not text:
@@ -451,6 +493,61 @@ class POSWindow(QMainWindow):
                 self.price_input.setText(str(result[1]))
         except Exception:
             pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def on_customer_type_changed(self):
+        # If a product is selected, update the price field to match the new customer type
+        barcode = self.part_input.text().strip()
+        if not barcode:
+            return
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT wholesale_price, price FROM products WHERE barcode = ?", (barcode,))
+            result = cursor.fetchone()
+            if result:
+                wholesale_price = result[0] if result[0] is not None else 0.0
+                retail_price = result[1] if result[1] is not None else 0.0
+                if self.cust_type_combo.currentText() == "Wholesale":
+                    self.price_input.setText(str(wholesale_price))
+                else:
+                    self.price_input.setText(str(retail_price))
+        except Exception:
+            pass
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    def lookup_by_description(self):
+        desc = self.desc_input.text().strip()
+        if not desc:
+            return
+        try:
+            conn = sqlite3.connect('pos_system.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT barcode, cost_price, wholesale_price, price FROM products WHERE name = ?", (desc,))
+            result = cursor.fetchone()
+            if result:
+                barcode = result[0] if result[0] is not None else ""
+                cost_price = result[1] if result[1] is not None else 0.0
+                wholesale_price = result[2] if result[2] is not None else 0.0
+                retail_price = result[3] if result[3] is not None else 0.0
+                self.part_input.setText(barcode)
+                self.cost_price_label.setText(f"Cost: {cost_price}")
+                self.price_input.setToolTip(f"Unit price (Cost: {cost_price})")
+                # Set price based on customer type
+                if self.cust_type_combo.currentText() == "Wholesale":
+                    self.price_input.setText(str(wholesale_price))
+                else:
+                    self.price_input.setText(str(retail_price))
+            else:
+                self.part_input.clear()
+                self.price_input.clear()
+                self.cost_price_label.setText("")
+        except Exception as e:
+            QMessageBox.warning(self, "Database Error", str(e))
         finally:
             if 'conn' in locals():
                 conn.close()
@@ -1092,18 +1189,39 @@ class ClassicMenuDialog(QDialog):
             win.show()
             win.raise_()
             win.activateWindow()
+        elif module_name == "Start / End of day":
+            self.close()
+            StartEndOfDayDialog(self.parent()).exec()
         elif module_name in ["Add/Modify Stock", "Stock Groups Maintenance", "Global Stock Maintenance", "Stock Quantity Adjustment"]:
             self.close()
             win = StockWindow(self.parent())
             win.show()
             win.raise_()
             win.activateWindow()
-        elif module_name in ["Invoicing", "Payments Received", "Add/Modify Clients"]:
+        elif module_name == "Invoicing":
             self.close()
-            win = SalesHistoryWindow(self.parent())
-            win.show()
-            win.raise_()
-            win.activateWindow()
+            dlg = InvoicingDialog(self.parent())
+            dlg.exec()
+        elif module_name == "Payments Received":
+            self.close()
+            dlg = PaymentsReceivedDialog(self.parent())
+            dlg.exec()
+        elif module_name == "Add/Modify Clients":
+            self.close()
+            dlg = AddModifyClientsDialog(self.parent())
+            dlg.exec()
+        elif module_name == "2 Invoices List Report":
+            self.close()
+            dlg = InvoicesListReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "3 Summary Sales Report":
+            self.close()
+            dlg = SummarySalesReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "4 Aged Clients Report":
+            self.close()
+            dlg = AgedClientsReportDialog(self.parent())
+            dlg.exec()
         elif module_name in ["Purchasing", "Payments to Suppliers", "Add/Modify Suppliers"]:
             self.close()
             win = PurchasingWindow(self.parent())
@@ -1168,7 +1286,9 @@ class ClassicMenuDialog(QDialog):
             finally:
                 if 'conn' in locals():
                     conn.close()
-            self.load_store_info()
+            # Call load_store_info on parent if it exists
+            if hasattr(self.parent(), 'load_store_info'):
+                self.parent().load_store_info()
 
 class StoreInfoDialog(QDialog):
     def __init__(self, parent=None):
@@ -1345,15 +1465,49 @@ def is_admin_manager_qr(username):
 class ClassicMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Kayan Point of Sale")
+        # Load store info
+        self.store_name = ""
+        self.store_address = ""
+        self.store_phone = ""
+        self.load_store_info()
+        self.setWindowTitle(f"{self.store_name} - Kayan Point of Sale" if self.store_name else "Kayan Point of Sale")
         self.setGeometry(100, 100, 1024, 700)
         self.setStyleSheet("background-color: #0a2a66;")
+        
+        # Create central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main layout
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # --- Top User/Date Bar ---
+        top_bar = QWidget()
+        top_bar_layout = QHBoxLayout(top_bar)
+        top_bar_layout.setContentsMargins(20, 6, 20, 6)
+        top_bar_layout.setSpacing(0)
+        
+        user_info = QLabel(f"User: {current_user if current_user else '-'} ({current_user_role if current_user_role else '-'})")
+        user_info.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
+        
+        from datetime import datetime
+        self.datetime_label = QLabel(datetime.now().strftime("%A, %d %B %Y %H:%M"))
+        self.datetime_label.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
+        
+        top_bar_layout.addWidget(user_info, alignment=Qt.AlignmentFlag.AlignLeft)
+        top_bar_layout.addStretch()
+        top_bar_layout.addWidget(self.datetime_label, alignment=Qt.AlignmentFlag.AlignRight)
+        main_layout.addWidget(top_bar)
+        
         # Top navigation bar
         nav_bar = QWidget()
         nav_layout = QHBoxLayout(nav_bar)
         nav_layout.setContentsMargins(20, 16, 20, 16)
         nav_layout.setSpacing(16)
         nav_layout.addStretch()
+        
         for label, icon_name in NAV_BUTTONS:
             btn = QPushButton(label)
             btn.setIcon(ICON_MAP.get(icon_name, QIcon()))
@@ -1363,109 +1517,96 @@ class ClassicMainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, l=label: self.menu_clicked(l))
             nav_layout.addWidget(btn)
         nav_layout.addStretch()
-        # Main area
-        main_panel = QWidget()
-        main_layout = QVBoxLayout(main_panel)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-        main_layout.addWidget(nav_bar, alignment=Qt.AlignmentFlag.AlignTop)
+        main_layout.addWidget(nav_bar)
+        
+        # --- Large Digital Clock at the Top ---
+        self.clock_label = QLabel()
+        self.clock_label.setFont(QFont('Arial', 64, QFont.Weight.Bold))
+        self.clock_label.setStyleSheet("color: white;")
+        self.clock_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.update_clock()
+        # Timer for clock
+        timer = QTimer(self)
+        timer.timeout.connect(self.update_clock)
+        timer.start(1000)
+        
         # --- Dashboard Section ---
         dashboard_widget = QWidget()
         dashboard_layout = QHBoxLayout(dashboard_widget)
         dashboard_layout.setContentsMargins(40, 20, 40, 10)
         dashboard_layout.setSpacing(30)
-        # Dashboard cards
+        dashboard_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        
         self.sales_today_label = self._make_dashboard_card("Today's Sales", "$0.00")
         self.transactions_today_label = self._make_dashboard_card("Transactions", "0")
         self.low_stock_label = self._make_dashboard_card("Low Stock Items", "0")
         self.top_product_label = self._make_dashboard_card("Top Product", "-")
+        
         dashboard_layout.addWidget(self.sales_today_label)
         dashboard_layout.addWidget(self.transactions_today_label)
         dashboard_layout.addWidget(self.low_stock_label)
         dashboard_layout.addWidget(self.top_product_label)
         dashboard_layout.addStretch()
-        # User info and date/time
-        user_info = QLabel(f"User: {current_user if current_user else '-'} ({current_user_role if current_user_role else '-'})")
-        user_info.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
-        from datetime import datetime
-        self.datetime_label = QLabel(datetime.now().strftime("%A, %d %B %Y %H:%M"))
-        self.datetime_label.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
-        dashboard_layout.addWidget(user_info)
-        dashboard_layout.addWidget(self.datetime_label)
         main_layout.addWidget(dashboard_widget)
+        
         # --- Quick Actions ---
         actions_widget = QWidget()
         actions_layout = QHBoxLayout(actions_widget)
         actions_layout.setContentsMargins(40, 0, 40, 0)
-        actions_layout.setSpacing(24)
-        new_sale_btn = QPushButton("New Sale")
-        new_sale_btn.setMinimumHeight(40)
-        new_sale_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
-        new_sale_btn.setStyleSheet("background: #388e3c; color: white; border-radius: 8px; font-size: 15px;")
-        new_sale_btn.clicked.connect(lambda: self.menu_clicked('POS'))
-        add_product_btn = QPushButton("Add Product")
-        add_product_btn.setMinimumHeight(40)
-        add_product_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
-        add_product_btn.setStyleSheet("background: #1976d2; color: white; border-radius: 8px; font-size: 15px;")
-        add_product_btn.clicked.connect(lambda: self.menu_clicked('Stock'))
-        receive_stock_btn = QPushButton("Receive Stock")
-        receive_stock_btn.setMinimumHeight(40)
-        receive_stock_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
-        receive_stock_btn.setStyleSheet("background: #ffa000; color: white; border-radius: 8px; font-size: 15px;")
-        receive_stock_btn.clicked.connect(lambda: self.menu_clicked('Purchases'))
-        print_report_btn = QPushButton("Print Report")
-        print_report_btn.setMinimumHeight(40)
-        print_report_btn.setFont(QFont('Arial', 13, QFont.Weight.Bold))
-        print_report_btn.setStyleSheet("background: #0a2a66; color: white; border-radius: 8px; font-size: 15px; border: 2px solid white;")
-        print_report_btn.clicked.connect(lambda: self.menu_clicked('Sales'))
-        actions_layout.addWidget(new_sale_btn)
-        actions_layout.addWidget(add_product_btn)
-        actions_layout.addWidget(receive_stock_btn)
-        actions_layout.addWidget(print_report_btn)
+        actions_layout.setSpacing(18)
+        actions_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        
+        self.new_sale_btn = QPushButton("New Sale")
+        self.new_sale_btn.setStyleSheet("background: #2ecc40; color: white; font-size: 17px; font-weight: bold; border-radius: 8px; padding: 10px 28px;")
+        self.new_sale_btn.clicked.connect(lambda: self.menu_clicked("POS"))
+        actions_layout.addWidget(self.new_sale_btn)
+        
+        self.add_product_btn = QPushButton("Add Product")
+        self.add_product_btn.setStyleSheet("background: #3498db; color: white; font-size: 17px; font-weight: bold; border-radius: 8px; padding: 10px 28px;")
+        self.add_product_btn.clicked.connect(lambda: self.menu_clicked("Stock"))
+        actions_layout.addWidget(self.add_product_btn)
+        
+        self.receive_stock_btn = QPushButton("Receive Stock")
+        self.receive_stock_btn.setStyleSheet("background: orange; color: white; font-size: 17px; font-weight: bold; border-radius: 8px; padding: 10px 28px;")
+        self.receive_stock_btn.clicked.connect(lambda: self.menu_clicked("Purchases"))
+        actions_layout.addWidget(self.receive_stock_btn)
+        
+        self.print_report_btn = QPushButton("Print Report")
+        self.print_report_btn.setStyleSheet("background: none; color: white; font-size: 17px; font-weight: bold; border: 2px solid white; border-radius: 8px; padding: 10px 28px;")
+        self.print_report_btn.clicked.connect(lambda: self.menu_clicked("Sales"))
+        actions_layout.addWidget(self.print_report_btn)
         actions_layout.addStretch()
         main_layout.addWidget(actions_widget)
-        # --- Recent Activity ---
+        
+        # --- Recent Activity Section ---
         recent_widget = QWidget()
         recent_layout = QVBoxLayout(recent_widget)
-        recent_layout.setContentsMargins(40, 10, 40, 0)
-        recent_layout.setSpacing(8)
-        recent_label = QLabel("Recent Activity")
-        recent_label.setFont(QFont('Arial', 16, QFont.Weight.Bold))
-        recent_label.setStyleSheet("color: white;")
-        recent_layout.addWidget(recent_label)
+        recent_layout.setContentsMargins(40, 20, 40, 20)
+        
+        recent_title = QLabel("Recent Activity")
+        recent_title.setFont(QFont('Arial', 18, QFont.Weight.Bold))
+        recent_title.setStyleSheet("color: white;")
+        recent_layout.addWidget(recent_title)
+        
         self.recent_table = QTableWidget()
         self.recent_table.setColumnCount(4)
-        self.recent_table.setHorizontalHeaderLabels(["Type", "Description", "Amount", "Time"])
+        self.recent_table.setHorizontalHeaderLabels(["Type", "Description", "Amount", "Date"])
         self.recent_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.recent_table.setStyleSheet("background: white; color: #0a2a66; font-size: 15px; border-radius: 8px;")
-        self.recent_table.setFixedHeight(180)
+        self.recent_table.setMaximumHeight(200)
+        self.recent_table.setStyleSheet("background: white; color: #0a2a66;")
         recent_layout.addWidget(self.recent_table)
+        
         main_layout.addWidget(recent_widget)
-        # --- Welcome Message ---
-        welcome = QLabel("\nWelcome to Kayan Point of Sale\n\nClick a menu above to open a module.")
-        welcome.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        welcome.setFont(QFont('Arial', 22, QFont.Weight.Bold))
-        welcome.setStyleSheet("color: white;")
-        main_layout.addWidget(welcome)
         main_layout.addStretch()
-        self.setCentralWidget(main_panel)
+        
         # Load dashboard data
         self.update_dashboard()
+        
         # Timer for date/time
-        from PyQt6.QtCore import QTimer
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_datetime)
         self.timer.start(60000)  # update every minute
-        self.store_name_label = QLabel("")
-        self.store_address_label = QLabel("")
-        self.store_phone_label = QLabel("")
-        self.store_name_label.setStyleSheet("color: #e3eafc; font-size: 18px; font-weight: bold;")
-        self.store_address_label.setStyleSheet("color: #e3eafc; font-size: 14px;")
-        self.store_phone_label.setStyleSheet("color: #e3eafc; font-size: 14px;")
-        main_layout.insertWidget(1, self.store_name_label)
-        main_layout.insertWidget(2, self.store_address_label)
-        main_layout.insertWidget(3, self.store_phone_label)
-        self.load_store_info()
+        
         self.current_store_id = None
         self.current_store_name = None
 
@@ -1519,16 +1660,40 @@ class ClassicMainWindow(QMainWindow):
                 self.top_product_label.value_label.setText(row[0])
             else:
                 self.top_product_label.value_label.setText("-")
-            # Recent activity (last 5 sales)
+            # Recent activity (last 5 from sales, purchase_orders, payments)
+            activities = []
+            # Sales
             cursor.execute("SELECT id, total_amount, date, time FROM sales ORDER BY date DESC, time DESC LIMIT 5")
-            sales = cursor.fetchall()
-            self.recent_table.setRowCount(0)
-            for i, sale in enumerate(sales):
-                self.recent_table.insertRow(i)
-                self.recent_table.setItem(i, 0, QTableWidgetItem("Sale"))
-                self.recent_table.setItem(i, 1, QTableWidgetItem(f"Sale #{sale[0]}"))
-                self.recent_table.setItem(i, 2, QTableWidgetItem(f"${sale[1]:,.2f}"))
-                self.recent_table.setItem(i, 3, QTableWidgetItem(f"{sale[2]} {sale[3]}"))
+            for sale in cursor.fetchall():
+                activities.append(("Sale", f"Sale #{sale[0]}", sale[1], f"{sale[2]} {sale[3]}"))
+            # Purchases
+            try:
+                cursor.execute("SELECT id, total_amount, order_date FROM purchase_orders ORDER BY order_date DESC LIMIT 5")
+                for po in cursor.fetchall():
+                    activities.append(("Purchase", f"PO #{po[0]}", po[1], po[2]))
+            except Exception:
+                pass
+            # Payments (if you have a payments table)
+            try:
+                cursor.execute("SELECT id, amount, payment_date FROM payments ORDER BY payment_date DESC LIMIT 5")
+                for pay in cursor.fetchall():
+                    activities.append(("Payment", f"Payment #{pay[0]}", pay[1], pay[2]))
+            except Exception:
+                pass
+            
+            # Sort by date/time descending, take last 5
+            activities.sort(key=lambda x: x[3], reverse=True)
+            activities = activities[:5]
+            
+            # Update recent activity table
+            if hasattr(self, 'recent_table'):
+                self.recent_table.setRowCount(0)
+                for i, act in enumerate(activities):
+                    self.recent_table.insertRow(i)
+                    self.recent_table.setItem(i, 0, QTableWidgetItem(act[0]))
+                    self.recent_table.setItem(i, 1, QTableWidgetItem(act[1]))
+                    self.recent_table.setItem(i, 2, QTableWidgetItem(f"${act[2]:,.2f}"))
+                    self.recent_table.setItem(i, 3, QTableWidgetItem(act[3]))
         except Exception as e:
             pass
         finally:
@@ -1566,7 +1731,7 @@ class ClassicMainWindow(QMainWindow):
         if label == 'POS':
             actions = [
                 ("Point of Sale", 'POS'),
-                ("Start / End of day", 'POS'),
+                ("Start / End of day", 'START_END_DAY'),
             ]
             reports = [
                 ("1 Summary Income Report", 'Sales'),
@@ -1734,13 +1899,27 @@ class ClassicMainWindow(QMainWindow):
             cursor.execute("SELECT name, address, phone FROM store_info WHERE id=1")
             row = cursor.fetchone()
             if row:
-                self.store_name_label.setText(row[0])
-                self.store_address_label.setText(row[1])
-                self.store_phone_label.setText(row[2])
+                self.store_name = row[0]
+                self.store_address = row[1]
+                self.store_phone = row[2]
+                if hasattr(self, 'store_name_label'):
+                    self.store_name_label.setText(self.store_name)
+                if hasattr(self, 'store_address_label'):
+                    self.store_address_label.setText(self.store_address)
+                if hasattr(self, 'store_phone_label'):
+                    self.store_phone_label.setText(self.store_phone)
+                self.setWindowTitle(f"{self.store_name} - Kayan Point of Sale")
             else:
-                self.store_name_label.setText("")
-                self.store_address_label.setText("")
-                self.store_phone_label.setText("")
+                self.store_name = ""
+                self.store_address = ""
+                self.store_phone = ""
+                if hasattr(self, 'store_name_label'):
+                    self.store_name_label.setText("")
+                if hasattr(self, 'store_address_label'):
+                    self.store_address_label.setText("")
+                if hasattr(self, 'store_phone_label'):
+                    self.store_phone_label.setText("")
+                self.setWindowTitle("Kayan Point of Sale")
         except Exception:
             pass
         finally:
@@ -1774,7 +1953,16 @@ class ClassicMainWindow(QMainWindow):
             finally:
                 if 'conn' in locals():
                     conn.close()
-            self.load_store_info()
+            # Call load_store_info on parent if it exists
+            if hasattr(self.parent(), 'load_store_info'):
+                self.parent().load_store_info()
+
+    def get_store_name(self):
+        return self.store_name
+
+    def update_clock(self):
+        current_time = QTime.currentTime().toString('hh:mm:ss')
+        self.clock_label.setText(current_time)
 
 class StoreManagementDialog(QDialog):
     def __init__(self, parent=None):
@@ -1907,6 +2095,383 @@ class StoreSelectDialog(QDialog):
         layout.addWidget(btns)
     def get_selected_store(self):
         return self.store_combo.currentData(), self.store_combo.currentText()
+
+class StartEndOfDayDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Start / End of Day")
+        self.setFixedSize(400, 250)
+        self.setStyleSheet("background-color: #0a2a66; color: white; border-radius: 12px;")
+        layout = QVBoxLayout(self)
+        layout.setSpacing(18)
+        layout.setContentsMargins(28, 28, 28, 28)
+        self.status_label = QLabel()
+        self.status_label.setFont(QFont('Arial', 15, QFont.Weight.Bold))
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_label)
+        self.start_btn = QPushButton("Start Day")
+        self.start_btn.setFont(QFont('Arial', 15, QFont.Weight.Bold))
+        self.start_btn.setStyleSheet("background: #2ecc40; color: white; border-radius: 8px; padding: 10px 0;")
+        self.start_btn.clicked.connect(self.start_day)
+        layout.addWidget(self.start_btn)
+        self.end_btn = QPushButton("End Day")
+        self.end_btn.setFont(QFont('Arial', 15, QFont.Weight.Bold))
+        self.end_btn.setStyleSheet("background: #d32f2f; color: white; border-radius: 8px; padding: 10px 0;")
+        self.end_btn.clicked.connect(self.end_day)
+        layout.addWidget(self.end_btn)
+        self.load_status()
+    def load_status(self):
+        from datetime import date
+        today = date.today().strftime('%Y-%m-%d')
+        row = run_query("SELECT start_time, end_time, user FROM day_log WHERE date = ?", (today,), fetch="one")
+        if row:
+            start, end, user = row
+            if end:
+                self.status_label.setText(f"Day ended by {user} at {end}")
+                self.start_btn.setEnabled(False)
+                self.end_btn.setEnabled(False)
+            elif start:
+                self.status_label.setText(f"Day started by {user} at {start}")
+                self.start_btn.setEnabled(False)
+                self.end_btn.setEnabled(True)
+            else:
+                self.status_label.setText("Day not started yet.")
+                self.start_btn.setEnabled(True)
+                self.end_btn.setEnabled(False)
+        else:
+            self.status_label.setText("Day not started yet.")
+            self.start_btn.setEnabled(True)
+            self.end_btn.setEnabled(False)
+    def start_day(self):
+        from datetime import date, datetime
+        today = date.today().strftime('%Y-%m-%d')
+        now = datetime.now().strftime('%H:%M:%S')
+        user = current_user or "-"
+        # Insert or update day_log
+        row = run_query("SELECT * FROM day_log WHERE date = ?", (today,), fetch="one")
+        if row:
+            run_query("UPDATE day_log SET start_time=?, user=? WHERE date=?", (now, user, today))
+        else:
+            run_query("INSERT INTO day_log (date, start_time, user) VALUES (?, ?, ?)", (today, now, user))
+        QMessageBox.information(self, "Started", f"Day started at {now}")
+        self.load_status()
+    def end_day(self):
+        from datetime import date, datetime
+        today = date.today().strftime('%Y-%m-%d')
+        now = datetime.now().strftime('%H:%M:%S')
+        user = current_user or "-"
+        run_query("UPDATE day_log SET end_time=?, user=? WHERE date=?", (now, user, today))
+        QMessageBox.information(self, "Ended", f"Day ended at {now}")
+        self.load_status()
+
+class InvoicingDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Invoicing")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+
+        # Customer selection
+        customer_layout = QHBoxLayout()
+        customer_label = QLabel("Customer:")
+        customer_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.customer_input = QLineEdit()
+        self.customer_input.setPlaceholderText("Enter customer name or number")
+        customer_layout.addWidget(customer_label)
+        customer_layout.addWidget(self.customer_input)
+        layout.addLayout(customer_layout)
+
+        # Product entry
+        product_layout = QHBoxLayout()
+        product_label = QLabel("Product (Barcode/Name):")
+        product_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.product_input = QLineEdit()
+        self.product_input.setPlaceholderText("Enter barcode or product name")
+        self.add_product_btn = QPushButton("Add")
+        self.add_product_btn.clicked.connect(self.add_product_to_invoice)
+        product_layout.addWidget(product_label)
+        product_layout.addWidget(self.product_input)
+        product_layout.addWidget(self.add_product_btn)
+        layout.addLayout(product_layout)
+
+        # Invoice items table
+        self.items_table = QTableWidget()
+        self.items_table.setColumnCount(5)
+        self.items_table.setHorizontalHeaderLabels(["Product", "Description", "Qty", "Price", "Total"])
+        self.items_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.items_table)
+
+        # Totals
+        totals_layout = QHBoxLayout()
+        self.total_label = QLabel("Total: $0.00")
+        self.total_label.setFont(QFont('Arial', 15, QFont.Weight.Bold))
+        totals_layout.addStretch()
+        totals_layout.addWidget(self.total_label)
+        layout.addLayout(totals_layout)
+
+        # Save button
+        btn_layout = QHBoxLayout()
+        self.save_btn = QPushButton("Save Invoice")
+        self.save_btn.setStyleSheet("background: #2ecc40; color: white; font-size: 16px; font-weight: bold; border-radius: 8px; padding: 10px 28px;")
+        self.save_btn.clicked.connect(self.save_invoice)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.save_btn)
+        layout.addLayout(btn_layout)
+
+        self.products = []  # List of (product, desc, qty, price, total)
+
+    def add_product_to_invoice(self):
+        # For demo, just add dummy data. In real app, lookup product info.
+        text = self.product_input.text().strip()
+        if not text:
+            return
+        # Dummy: product, desc, qty, price, total
+        product = text
+        desc = "Sample Desc"
+        qty = 1
+        price = 10.0
+        total = qty * price
+        row = self.items_table.rowCount()
+        self.items_table.insertRow(row)
+        self.items_table.setItem(row, 0, QTableWidgetItem(product))
+        self.items_table.setItem(row, 1, QTableWidgetItem(desc))
+        self.items_table.setItem(row, 2, QTableWidgetItem(str(qty)))
+        self.items_table.setItem(row, 3, QTableWidgetItem(f"{price:.2f}"))
+        self.items_table.setItem(row, 4, QTableWidgetItem(f"{total:.2f}"))
+        self.products.append((product, desc, qty, price, total))
+        self.update_total()
+        self.product_input.clear()
+
+    def update_total(self):
+        total = sum(item[4] for item in self.products)
+        self.total_label.setText(f"Total: ${total:.2f}")
+
+    def save_invoice(self):
+        # For demo, just show a message. In real app, save to DB.
+        if not self.products:
+            QMessageBox.warning(self, "No Items", "Add at least one product to the invoice.")
+            return
+        QMessageBox.information(self, "Invoice Saved", "Invoice has been saved (demo mode).")
+        self.accept()
+
+class PaymentsReceivedDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Payments Received")
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+
+        # Customer selection
+        customer_layout = QHBoxLayout()
+        customer_label = QLabel("Customer:")
+        customer_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.customer_input = QLineEdit()
+        self.customer_input.setPlaceholderText("Enter customer name or number")
+        customer_layout.addWidget(customer_label)
+        customer_layout.addWidget(self.customer_input)
+        layout.addLayout(customer_layout)
+
+        # Amount
+        amount_layout = QHBoxLayout()
+        amount_label = QLabel("Amount:")
+        amount_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.amount_input = QLineEdit()
+        self.amount_input.setPlaceholderText("Enter amount received")
+        amount_layout.addWidget(amount_label)
+        amount_layout.addWidget(self.amount_input)
+        layout.addLayout(amount_layout)
+
+        # Date
+        date_layout = QHBoxLayout()
+        date_label = QLabel("Date:")
+        date_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.date_input = QDateEdit()
+        self.date_input.setCalendarPopup(True)
+        self.date_input.setDate(QDate.currentDate())
+        date_layout.addWidget(date_label)
+        date_layout.addWidget(self.date_input)
+        layout.addLayout(date_layout)
+
+        # Payment method
+        method_layout = QHBoxLayout()
+        method_label = QLabel("Payment Method:")
+        method_label.setFont(QFont('Arial', 13, QFont.Weight.Bold))
+        self.method_combo = QComboBox()
+        self.method_combo.addItems(["Cash", "Card", "Bank Transfer", "Other"])
+        method_layout.addWidget(method_label)
+        method_layout.addWidget(self.method_combo)
+        layout.addLayout(method_layout)
+
+        # Save button
+        btn_layout = QHBoxLayout()
+        self.save_btn = QPushButton("Save Payment")
+        self.save_btn.setStyleSheet("background: #2ecc40; color: white; font-size: 16px; font-weight: bold; border-radius: 8px; padding: 10px 28px;")
+        self.save_btn.clicked.connect(self.save_payment)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.save_btn)
+        layout.addLayout(btn_layout)
+
+    def save_payment(self):
+        # For demo, just show a message. In real app, save to DB.
+        if not self.customer_input.text().strip() or not self.amount_input.text().strip():
+            QMessageBox.warning(self, "Missing Data", "Please enter customer and amount.")
+            return
+        QMessageBox.information(self, "Payment Saved", "Payment has been saved (demo mode).")
+        self.accept()
+
+class AddModifyClientsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add/Modify Clients")
+        self.setMinimumWidth(600)
+        layout = QVBoxLayout(self)
+
+        # Clients table
+        self.clients_table = QTableWidget()
+        self.clients_table.setColumnCount(2)
+        self.clients_table.setHorizontalHeaderLabels(["Name", "Contact Info"])
+        self.clients_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.clients_table)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.add_btn = QPushButton("Add Client")
+        self.edit_btn = QPushButton("Edit Client")
+        self.delete_btn = QPushButton("Delete Client")
+        btn_layout.addWidget(self.add_btn)
+        btn_layout.addWidget(self.edit_btn)
+        btn_layout.addWidget(self.delete_btn)
+        layout.addLayout(btn_layout)
+
+        # Connect buttons to placeholder methods
+        self.add_btn.clicked.connect(self.add_client)
+        self.edit_btn.clicked.connect(self.edit_client)
+        self.delete_btn.clicked.connect(self.delete_client)
+
+        self.load_clients()
+
+    def load_clients(self):
+        # For demo, just show dummy data. In real app, load from DB.
+        self.clients_table.setRowCount(0)
+        demo_clients = [
+            ("John Doe", "555-1234"),
+            ("Jane Smith", "555-5678"),
+        ]
+        for row, (name, contact) in enumerate(demo_clients):
+            self.clients_table.insertRow(row)
+            self.clients_table.setItem(row, 0, QTableWidgetItem(name))
+            self.clients_table.setItem(row, 1, QTableWidgetItem(contact))
+
+    def add_client(self):
+        dlg = ClientFormDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name, contact = dlg.get_data()
+            row = self.clients_table.rowCount()
+            self.clients_table.insertRow(row)
+            self.clients_table.setItem(row, 0, QTableWidgetItem(name))
+            self.clients_table.setItem(row, 1, QTableWidgetItem(contact))
+
+    def edit_client(self):
+        row = self.clients_table.currentRow()
+        if row == -1:
+            QMessageBox.warning(self, "Select Client", "Please select a client to edit.")
+            return
+        name = self.clients_table.item(row, 0).text()
+        contact = self.clients_table.item(row, 1).text()
+        dlg = ClientFormDialog(self, name, contact)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_name, new_contact = dlg.get_data()
+            self.clients_table.setItem(row, 0, QTableWidgetItem(new_name))
+            self.clients_table.setItem(row, 1, QTableWidgetItem(new_contact))
+
+    def delete_client(self):
+        row = self.clients_table.currentRow()
+        if row == -1:
+            QMessageBox.warning(self, "Select Client", "Please select a client to delete.")
+            return
+        self.clients_table.removeRow(row)
+
+class ClientFormDialog(QDialog):
+    def __init__(self, parent=None, name="", contact=""):
+        super().__init__(parent)
+        self.setWindowTitle("Client Details")
+        layout = QFormLayout(self)
+        self.name_input = QLineEdit(name)
+        self.contact_input = QLineEdit(contact)
+        layout.addRow("Name:", self.name_input)
+        layout.addRow("Contact Info:", self.contact_input)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addRow(btns)
+    def get_data(self):
+        return self.name_input.text(), self.contact_input.text()
+
+class InvoicesListReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Invoices List Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Invoice #", "Customer", "Date", "Total"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_invoices = [
+            ("1001", "John Doe", "2024-07-01", "$120.00"),
+            ("1002", "Jane Smith", "2024-07-02", "$75.50"),
+        ]
+        self.table.setRowCount(0)
+        for row, (inv, cust, date, total) in enumerate(demo_invoices):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(inv))
+            self.table.setItem(row, 1, QTableWidgetItem(cust))
+            self.table.setItem(row, 2, QTableWidgetItem(date))
+            self.table.setItem(row, 3, QTableWidgetItem(total))
+
+class SummarySalesReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Summary Sales Report")
+        self.setMinimumWidth(500)
+        layout = QVBoxLayout(self)
+        # Demo summary data
+        total_sales = 195.50
+        num_invoices = 2
+        avg_sale = 97.75
+        layout.addWidget(QLabel(f"Total Sales: ${total_sales:.2f}"))
+        layout.addWidget(QLabel(f"Number of Invoices: {num_invoices}"))
+        layout.addWidget(QLabel(f"Average Sale: ${avg_sale:.2f}"))
+        layout.addStretch()
+
+class AgedClientsReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Aged Clients Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Client", "Current", "30 Days", "60 Days", "90+ Days"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_clients = [
+            ("John Doe", "$50.00", "$20.00", "$0.00", "$0.00"),
+            ("Jane Smith", "$0.00", "$0.00", "$30.00", "$10.00"),
+        ]
+        self.table.setRowCount(0)
+        for row, (client, curr, d30, d60, d90) in enumerate(demo_clients):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(client))
+            self.table.setItem(row, 1, QTableWidgetItem(curr))
+            self.table.setItem(row, 2, QTableWidgetItem(d30))
+            self.table.setItem(row, 3, QTableWidgetItem(d60))
+            self.table.setItem(row, 4, QTableWidgetItem(d90))
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

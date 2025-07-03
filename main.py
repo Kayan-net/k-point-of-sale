@@ -1386,22 +1386,27 @@ class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Login")
-        self.setGeometry(400, 300, 300, 150)
+        self.setFixedSize(420, 240)
+        self.setStyleSheet("background-color: #23272e; color: #fff; border-radius: 14px;")
         self.layout = QVBoxLayout(self)
-
+        self.layout.setSpacing(22)
+        self.layout.setContentsMargins(28, 28, 28, 28)
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Username")
+        self.username_input.setFont(QFont('Arial', 16))
+        self.username_input.setStyleSheet("background: #181a20; color: #fff; border-radius: 8px; padding: 10px 14px; font-size: 16px;")
         self.layout.addWidget(self.username_input)
-
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Password")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setFont(QFont('Arial', 16))
+        self.password_input.setStyleSheet("background: #181a20; color: #fff; border-radius: 8px; padding: 10px 14px; font-size: 16px;")
         self.layout.addWidget(self.password_input)
-
         login_button = QPushButton("Login")
+        login_button.setFont(QFont('Arial', 16, QFont.Weight.Bold))
+        login_button.setStyleSheet("background: #388e3c; color: #fff; border-radius: 8px; padding: 12px 0; font-size: 18px;")
         login_button.clicked.connect(self.check_login)
         self.layout.addWidget(login_button)
-
         # Add a default admin user if no users exist
         if not run_query("SELECT * FROM users", fetch="all"):
             hashed_password = hash_password("admin")
