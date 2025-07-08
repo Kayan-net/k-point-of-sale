@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget,
     QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QHBoxLayout,
-    QMessageBox, QDialog, QHeaderView, QDialogButtonBox, QFormLayout, QSplitter, QComboBox, QFileDialog, QTabWidget, QScrollArea, QDateEdit
+    QMessageBox, QDialog, QHeaderView, QDialogButtonBox, QFormLayout, QSplitter, QComboBox, QFileDialog, QTabWidget, QScrollArea, QDateEdit, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont
@@ -351,15 +351,37 @@ class POSWidget(QWidget):
         self.sales_items = {}
         main_layout = QVBoxLayout(self)
 
-        # Barcode input and Add Item button
+        # Barcode, Description, Qty, Price, Add button row
         barcode_layout = QHBoxLayout()
         self.barcode_input = QLineEdit()
         self.barcode_input.setPlaceholderText("Enter barcode...")
+        self.barcode_input.setMaximumWidth(180)
         self.barcode_input.returnPressed.connect(self.add_item_to_sale)
-        add_item_button = QPushButton("Add Item")
+
+        self.description_input = QLineEdit()
+        self.description_input.setPlaceholderText("Description")
+        self.description_input.setMaximumWidth(320)
+
+        self.qty_input = QLineEdit("1")
+        self.qty_input.setMaximumWidth(60)
+
+        self.price_input = QLineEdit()
+        self.price_input.setPlaceholderText("Price")
+        self.price_input.setMaximumWidth(100)
+
+        add_item_button = QPushButton("Add")
+        add_item_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        add_item_button.setFixedWidth(100)
         add_item_button.clicked.connect(self.add_item_to_sale)
-        barcode_layout.addWidget(QLabel("Barcode:"))
+
+        barcode_layout.addWidget(QLabel("Part No./Barcode:"))
         barcode_layout.addWidget(self.barcode_input)
+        barcode_layout.addWidget(QLabel("Description:"))
+        barcode_layout.addWidget(self.description_input)
+        barcode_layout.addWidget(QLabel("Qty:"))
+        barcode_layout.addWidget(self.qty_input)
+        barcode_layout.addWidget(QLabel("Price:"))
+        barcode_layout.addWidget(self.price_input)
         barcode_layout.addWidget(add_item_button)
         main_layout.addLayout(barcode_layout)
 

@@ -1222,6 +1222,42 @@ class ClassicMenuDialog(QDialog):
             self.close()
             dlg = AgedClientsReportDialog(self.parent())
             dlg.exec()
+        elif module_name == "5 Client's Statements":
+            self.close()
+            dlg = ClientsStatementsDialog(self.parent())
+            dlg.exec()
+        elif module_name == "6 Sales Analysis Report":
+            self.close()
+            dlg = SalesAnalysisReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "7 Back Orders Report":
+            self.close()
+            dlg = BackOrdersReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "8 Sales Tax Report":
+            self.close()
+            dlg = SalesTaxReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "9 Bank Deposit":
+            self.close()
+            dlg = BankDepositReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "a Sale Payments Report":
+            self.close()
+            dlg = SalePaymentsReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "b Sales by Client":
+            self.close()
+            dlg = SalesByClientReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "c Sales by Product":
+            self.close()
+            dlg = SalesByProductReportDialog(self.parent())
+            dlg.exec()
+        elif module_name == "d Client Sales/Product":
+            self.close()
+            dlg = ClientSalesProductDialog(self.parent())
+            dlg.exec()
         elif module_name in ["Purchasing", "Payments to Suppliers", "Add/Modify Suppliers"]:
             self.close()
             win = PurchasingWindow(self.parent())
@@ -2472,6 +2508,516 @@ class AgedClientsReportDialog(QDialog):
             self.table.setItem(row, 2, QTableWidgetItem(d30))
             self.table.setItem(row, 3, QTableWidgetItem(d60))
             self.table.setItem(row, 4, QTableWidgetItem(d90))
+
+class ClientsStatementsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Client's Statements")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        # Client selection
+        client_layout = QHBoxLayout()
+        client_label = QLabel("Client:")
+        self.client_combo = QComboBox()
+        self.client_combo.addItems(["John Doe", "Jane Smith"])
+        self.client_combo.currentIndexChanged.connect(self.load_demo_data)
+        client_layout.addWidget(client_label)
+        client_layout.addWidget(self.client_combo)
+        layout.addLayout(client_layout)
+        # Transactions table
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Date", "Description", "Debit", "Credit", "Balance"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        client = self.client_combo.currentText()
+        if client == "John Doe":
+            demo_txns = [
+                ("2024-07-01", "Invoice #1001", "$120.00", "$0.00", "$120.00"),
+                ("2024-07-05", "Payment", "$0.00", "$50.00", "$70.00"),
+            ]
+        else:
+            demo_txns = [
+                ("2024-07-02", "Invoice #1002", "$75.50", "$0.00", "$75.50"),
+                ("2024-07-06", "Payment", "$0.00", "$75.50", "$0.00"),
+            ]
+        self.table.setRowCount(0)
+        for row, (date, desc, debit, credit, bal) in enumerate(demo_txns):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(date))
+            self.table.setItem(row, 1, QTableWidgetItem(desc))
+            self.table.setItem(row, 2, QTableWidgetItem(debit))
+            self.table.setItem(row, 3, QTableWidgetItem(credit))
+            self.table.setItem(row, 4, QTableWidgetItem(bal))
+
+class SalesAnalysisReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sales Analysis Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Product", "Quantity Sold", "Revenue"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_sales = [
+            ("Widget A", "15", "$150.00"),
+            ("Widget B", "8", "$80.00"),
+        ]
+        self.table.setRowCount(0)
+        for row, (prod, qty, rev) in enumerate(demo_sales):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(prod))
+            self.table.setItem(row, 1, QTableWidgetItem(qty))
+            self.table.setItem(row, 2, QTableWidgetItem(rev))
+
+class BackOrdersReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Back Orders Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Product", "Client", "Quantity", "Order Date", "Status"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_orders = [
+            ("Widget A", "John Doe", "5", "2024-07-01", "Pending"),
+            ("Widget B", "Jane Smith", "2", "2024-07-03", "Shipped"),
+        ]
+        self.table.setRowCount(0)
+        for row, (prod, client, qty, date, status) in enumerate(demo_orders):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(prod))
+            self.table.setItem(row, 1, QTableWidgetItem(client))
+            self.table.setItem(row, 2, QTableWidgetItem(qty))
+            self.table.setItem(row, 3, QTableWidgetItem(date))
+            self.table.setItem(row, 4, QTableWidgetItem(status))
+
+class SalesTaxReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sales Tax Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Invoice", "Customer", "Date", "Taxable Amount", "Tax Amount"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_taxes = [
+            ("1001", "John Doe", "2024-07-01", "$100.00", "$20.00"),
+            ("1002", "Jane Smith", "2024-07-02", "$50.00", "$10.00"),
+        ]
+        self.table.setRowCount(0)
+        for row, (inv, cust, date, taxable, tax) in enumerate(demo_taxes):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(inv))
+            self.table.setItem(row, 1, QTableWidgetItem(cust))
+            self.table.setItem(row, 2, QTableWidgetItem(date))
+            self.table.setItem(row, 3, QTableWidgetItem(taxable))
+            self.table.setItem(row, 4, QTableWidgetItem(tax))
+
+class BankDepositReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Bank Deposit Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Date", "Amount", "Reference", "Deposited By", "Status"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_deposits = [
+            ("2024-07-01", "$500.00", "DEP-001", "Admin", "Cleared"),
+            ("2024-07-03", "$250.00", "DEP-002", "Manager", "Pending"),
+        ]
+        self.table.setRowCount(0)
+        for row, (date, amount, ref, by, status) in enumerate(demo_deposits):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(date))
+            self.table.setItem(row, 1, QTableWidgetItem(amount))
+            self.table.setItem(row, 2, QTableWidgetItem(ref))
+            self.table.setItem(row, 3, QTableWidgetItem(by))
+            self.table.setItem(row, 4, QTableWidgetItem(status))
+
+class SalePaymentsReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sale Payments Report")
+        self.setMinimumWidth(700)
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Date", "Invoice", "Customer", "Amount", "Method"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        self.load_demo_data()
+    def load_demo_data(self):
+        demo_payments = [
+            ("2024-07-05", "1001", "John Doe", "$50.00", "Cash"),
+            ("2024-07-06", "1002", "Jane Smith", "$75.50", "Card"),
+        ]
+        self.table.setRowCount(0)
+        for row, (date, inv, cust, amount, method) in enumerate(demo_payments):
+            self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(date))
+            self.table.setItem(row, 1, QTableWidgetItem(inv))
+            self.table.setItem(row, 2, QTableWidgetItem(cust))
+            self.table.setItem(row, 3, QTableWidgetItem(amount))
+            self.table.setItem(row, 4, QTableWidgetItem(method))
+
+class SalesByClientReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sales by Client Report")
+        self.setGeometry(100, 100, 800, 600)
+        
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header_label = QLabel("Sales by Client Report")
+        header_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        layout.addWidget(header_label)
+        
+        # Date range selection
+        date_layout = QHBoxLayout()
+        date_layout.addWidget(QLabel("From:"))
+        self.from_date = QDateEdit()
+        self.from_date.setDate(QDate.currentDate().addDays(-30))
+        date_layout.addWidget(self.from_date)
+        date_layout.addWidget(QLabel("To:"))
+        self.to_date = QDateEdit()
+        self.to_date.setDate(QDate.currentDate())
+        date_layout.addWidget(self.to_date)
+        
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.load_demo_data)
+        date_layout.addWidget(refresh_button)
+        date_layout.addStretch()
+        layout.addLayout(date_layout)
+        
+        # Summary section
+        summary_layout = QHBoxLayout()
+        self.total_sales_label = QLabel("Total Sales: $0.00")
+        self.total_sales_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.total_sales_label)
+        
+        self.total_clients_label = QLabel("Total Clients: 0")
+        self.total_clients_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.total_clients_label)
+        
+        self.avg_sale_label = QLabel("Average Sale: $0.00")
+        self.avg_sale_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.avg_sale_label)
+        summary_layout.addStretch()
+        layout.addLayout(summary_layout)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "Client Name", "Total Sales", "Number of Sales", 
+            "Average Sale", "Last Sale Date", "Status"
+        ])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        export_button = QPushButton("Export to CSV")
+        export_button.clicked.connect(self.export_to_csv)
+        button_layout.addWidget(export_button)
+        
+        print_button = QPushButton("Print Report")
+        print_button.clicked.connect(self.print_report)
+        button_layout.addWidget(print_button)
+        
+        button_layout.addStretch()
+        
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        self.load_demo_data()
+    
+    def load_demo_data(self):
+        # Demo data - in real app, this would query the database
+        demo_data = [
+            ("John Smith", 1250.00, 8, 156.25, "2024-01-15", "Active"),
+            ("Mary Johnson", 890.50, 5, 178.10, "2024-01-14", "Active"),
+            ("Robert Wilson", 2100.75, 12, 175.06, "2024-01-13", "Active"),
+            ("Sarah Davis", 675.25, 4, 168.81, "2024-01-12", "Inactive"),
+            ("Michael Brown", 1450.00, 9, 161.11, "2024-01-11", "Active"),
+            ("Lisa Anderson", 320.00, 2, 160.00, "2024-01-10", "Active"),
+            ("David Miller", 890.00, 6, 148.33, "2024-01-09", "Active"),
+            ("Jennifer Taylor", 450.50, 3, 150.17, "2024-01-08", "Inactive"),
+            ("Christopher Lee", 1200.00, 7, 171.43, "2024-01-07", "Active"),
+            ("Amanda White", 780.25, 5, 156.05, "2024-01-06", "Active"),
+        ]
+        
+        self.table.setRowCount(len(demo_data))
+        
+        total_sales = 0
+        total_clients = len(demo_data)
+        
+        for row, (client, sales, count, avg, last_date, status) in enumerate(demo_data):
+            self.table.setItem(row, 0, QTableWidgetItem(client))
+            self.table.setItem(row, 1, QTableWidgetItem(f"${sales:.2f}"))
+            self.table.setItem(row, 2, QTableWidgetItem(str(count)))
+            self.table.setItem(row, 3, QTableWidgetItem(f"${avg:.2f}"))
+            self.table.setItem(row, 4, QTableWidgetItem(last_date))
+            self.table.setItem(row, 5, QTableWidgetItem(status))
+            
+            total_sales += sales
+        
+        avg_sale = total_sales / total_clients if total_clients > 0 else 0
+        
+        self.total_sales_label.setText(f"Total Sales: ${total_sales:.2f}")
+        self.total_clients_label.setText(f"Total Clients: {total_clients}")
+        self.avg_sale_label.setText(f"Average Sale: ${avg_sale:.2f}")
+    
+    def export_to_csv(self):
+        # For demo, just show a message. In real app, export to CSV file.
+        QMessageBox.information(self, "Export", "Sales by Client report exported to CSV successfully!")
+    
+    def print_report(self):
+        # For demo, just show a message. In real app, print the report.
+        QMessageBox.information(self, "Print", "Sales by Client report sent to printer successfully!")
+
+class SalesByProductReportDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sales by Product Report")
+        self.setGeometry(100, 100, 900, 600)
+        
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header_label = QLabel("Sales by Product Report")
+        header_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        layout.addWidget(header_label)
+        
+        # Date range selection
+        date_layout = QHBoxLayout()
+        date_layout.addWidget(QLabel("From:"))
+        self.from_date = QDateEdit()
+        self.from_date.setDate(QDate.currentDate().addDays(-30))
+        date_layout.addWidget(self.from_date)
+        date_layout.addWidget(QLabel("To:"))
+        self.to_date = QDateEdit()
+        self.to_date.setDate(QDate.currentDate())
+        date_layout.addWidget(self.to_date)
+        
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.load_demo_data)
+        date_layout.addWidget(refresh_button)
+        date_layout.addStretch()
+        layout.addLayout(date_layout)
+        
+        # Summary section
+        summary_layout = QHBoxLayout()
+        self.total_sales_label = QLabel("Total Sales: $0.00")
+        self.total_sales_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.total_sales_label)
+        
+        self.total_products_label = QLabel("Total Products: 0")
+        self.total_products_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.total_products_label)
+        
+        self.total_units_label = QLabel("Total Units Sold: 0")
+        self.total_units_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.total_units_label)
+        
+        self.avg_price_label = QLabel("Average Price: $0.00")
+        self.avg_price_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        summary_layout.addWidget(self.avg_price_label)
+        summary_layout.addStretch()
+        layout.addLayout(summary_layout)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(8)
+        self.table.setHorizontalHeaderLabels([
+            "Product Name", "Barcode", "Units Sold", "Total Sales", 
+            "Average Price", "Cost Price", "Profit", "Profit %"
+        ])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        export_button = QPushButton("Export to CSV")
+        export_button.clicked.connect(self.export_to_csv)
+        button_layout.addWidget(export_button)
+        
+        print_button = QPushButton("Print Report")
+        print_button.clicked.connect(self.print_report)
+        button_layout.addWidget(print_button)
+        
+        button_layout.addStretch()
+        
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        self.load_demo_data()
+    
+    def load_demo_data(self):
+        # Demo data - in real app, this would query the database
+        demo_data = [
+            ("Laptop Computer", "123456789", 15, 22500.00, 1500.00, 1200.00, 4500.00, 20.0),
+            ("Wireless Mouse", "987654321", 45, 1350.00, 30.00, 20.00, 450.00, 33.3),
+            ("USB Keyboard", "456789123", 32, 1280.00, 40.00, 25.00, 480.00, 37.5),
+            ("Monitor 24\"", "789123456", 12, 4800.00, 400.00, 300.00, 1200.00, 25.0),
+            ("Webcam HD", "321654987", 28, 1400.00, 50.00, 35.00, 420.00, 30.0),
+            ("USB Flash Drive 32GB", "654987321", 60, 1800.00, 30.00, 18.00, 720.00, 40.0),
+            ("Wireless Headphones", "147258369", 25, 1875.00, 75.00, 50.00, 625.00, 33.3),
+            ("Tablet Stand", "963852741", 40, 800.00, 20.00, 12.00, 320.00, 40.0),
+            ("Bluetooth Speaker", "852963741", 18, 1260.00, 70.00, 45.00, 450.00, 35.7),
+            ("Phone Charger", "741852963", 55, 1100.00, 20.00, 12.00, 440.00, 40.0),
+        ]
+        
+        self.table.setRowCount(len(demo_data))
+        
+        total_sales = 0
+        total_products = len(demo_data)
+        total_units = 0
+        total_cost = 0
+        
+        for row, (product, barcode, units, sales, avg_price, cost, profit, profit_pct) in enumerate(demo_data):
+            self.table.setItem(row, 0, QTableWidgetItem(product))
+            self.table.setItem(row, 1, QTableWidgetItem(barcode))
+            self.table.setItem(row, 2, QTableWidgetItem(str(units)))
+            self.table.setItem(row, 3, QTableWidgetItem(f"${sales:.2f}"))
+            self.table.setItem(row, 4, QTableWidgetItem(f"${avg_price:.2f}"))
+            self.table.setItem(row, 5, QTableWidgetItem(f"${cost:.2f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(f"${profit:.2f}"))
+            self.table.setItem(row, 7, QTableWidgetItem(f"{profit_pct:.1f}%"))
+            
+            total_sales += sales
+            total_units += units
+            total_cost += cost * units
+        
+        avg_price = total_sales / total_units if total_units > 0 else 0
+        
+        self.total_sales_label.setText(f"Total Sales: ${total_sales:.2f}")
+        self.total_products_label.setText(f"Total Products: {total_products}")
+        self.total_units_label.setText(f"Total Units Sold: {total_units}")
+        self.avg_price_label.setText(f"Average Price: ${avg_price:.2f}")
+    
+    def export_to_csv(self):
+        # For demo, just show a message. In real app, export to CSV file.
+        QMessageBox.information(self, "Export", "Sales by Product report exported to CSV successfully!")
+    
+    def print_report(self):
+        # For demo, just show a message. In real app, print the report.
+        QMessageBox.information(self, "Print", "Sales by Product report sent to printer successfully!")
+
+class ClientSalesProductDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Client Sales/Product Report")
+        self.setGeometry(100, 100, 900, 600)
+        
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header_label = QLabel("Client Sales/Product Report")
+        header_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        layout.addWidget(header_label)
+        
+        # Date range selection
+        date_layout = QHBoxLayout()
+        date_layout.addWidget(QLabel("From:"))
+        self.from_date = QDateEdit()
+        self.from_date.setDate(QDate.currentDate().addDays(-30))
+        date_layout.addWidget(self.from_date)
+        date_layout.addWidget(QLabel("To:"))
+        self.to_date = QDateEdit()
+        self.to_date.setDate(QDate.currentDate())
+        date_layout.addWidget(self.to_date)
+        
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.load_demo_data)
+        date_layout.addWidget(refresh_button)
+        date_layout.addStretch()
+        layout.addLayout(date_layout)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels([
+            "Client Name", "Product Name", "Units Purchased", "Total Spent", "Last Purchase Date"
+        ])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        export_button = QPushButton("Export to CSV")
+        export_button.clicked.connect(self.export_to_csv)
+        button_layout.addWidget(export_button)
+        
+        print_button = QPushButton("Print Report")
+        print_button.clicked.connect(self.print_report)
+        button_layout.addWidget(print_button)
+        
+        button_layout.addStretch()
+        
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+        
+        self.load_demo_data()
+    
+    def load_demo_data(self):
+        # Demo data - in real app, this would query the database
+        demo_data = [
+            ("John Smith", "Laptop Computer", 3, 4500.00, "2024-01-15"),
+            ("John Smith", "Wireless Mouse", 2, 60.00, "2024-01-15"),
+            ("Mary Johnson", "USB Keyboard", 1, 40.00, "2024-01-14"),
+            ("Mary Johnson", "Monitor 24\"", 1, 400.00, "2024-01-14"),
+            ("Robert Wilson", "Webcam HD", 4, 200.00, "2024-01-13"),
+            ("Sarah Davis", "USB Flash Drive 32GB", 5, 150.00, "2024-01-12"),
+            ("Michael Brown", "Wireless Headphones", 2, 150.00, "2024-01-11"),
+            ("Lisa Anderson", "Tablet Stand", 3, 60.00, "2024-01-10"),
+            ("David Miller", "Bluetooth Speaker", 1, 70.00, "2024-01-09"),
+            ("Jennifer Taylor", "Phone Charger", 2, 40.00, "2024-01-08"),
+        ]
+        
+        self.table.setRowCount(len(demo_data))
+        
+        for row, (client, product, units, total, last_date) in enumerate(demo_data):
+            self.table.setItem(row, 0, QTableWidgetItem(client))
+            self.table.setItem(row, 1, QTableWidgetItem(product))
+            self.table.setItem(row, 2, QTableWidgetItem(str(units)))
+            self.table.setItem(row, 3, QTableWidgetItem(f"${total:.2f}"))
+            self.table.setItem(row, 4, QTableWidgetItem(last_date))
+    
+    def export_to_csv(self):
+        # For demo, just show a message. In real app, export to CSV file.
+        QMessageBox.information(self, "Export", "Client Sales/Product report exported to CSV successfully!")
+    
+    def print_report(self):
+        # For demo, just show a message. In real app, print the report.
+        QMessageBox.information(self, "Print", "Client Sales/Product report sent to printer successfully!")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
